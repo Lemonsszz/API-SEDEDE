@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 
 class NoticiaController extends Controller
 {
@@ -33,7 +34,7 @@ class NoticiaController extends Controller
             'data' => $noticias,
         ]);
     }
-    
+
     // Listar todas las noticias para el panel administrativo
     public function adminIndex(): JsonResponse
     {
@@ -57,6 +58,7 @@ class NoticiaController extends Controller
             'data' => $noticias,
         ]);
     }
+
     // Crear noticia (administrador)
     public function store(Request $request): JsonResponse
     {
@@ -71,27 +73,24 @@ class NoticiaController extends Controller
             'publicada' => ['sometimes', 'boolean'],
         ]);
 
-        $slugBase = Str::slug($datos['titulo']);
-        $slug = $slugBase;
-        $contador = 2;
+        [$id, $slug] = $this->guardarConSlugUnico(function () use ($datos) {
+            $slug = $this->generarSlug($datos['titulo']);
+            $ahora = now();
 
-        while (DB::table('noticias')->where('slug', $slug)->exists()) {
-            $slug = $slugBase . '-' . $contador++;
-        }
+            $id = DB::table('noticias')->insertGetId([
+                'titulo' => $datos['titulo'],
+                'slug' => $slug,
+                'resumen' => $datos['resumen'],
+                'contenido' => $datos['contenido'],
+                'imagen_url' => $datos['imagen_url'] ?? null,
+                'categoria' => $datos['categoria'],
+                'fecha_publicacion' => $datos['fecha_publicacion'] ?? $ahora,
+                'destacada' => $datos['destacada'] ?? false,
+                'publicada' => $datos['publicada'] ?? false,
+            ]);
 
-        $ahora = now();
-
-        $id = DB::table('noticias')->insertGetId([
-            'titulo' => $datos['titulo'],
-            'slug' => $slug,
-            'resumen' => $datos['resumen'],
-            'contenido' => $datos['contenido'],
-            'imagen_url' => $datos['imagen_url'] ?? null,
-            'categoria' => $datos['categoria'],
-            'fecha_publicacion' => $datos['fecha_publicacion'] ?? $ahora,
-            'destacada' => $datos['destacada'] ?? false,
-            'publicada' => $datos['publicada'] ?? false,
-        ]);
+            return [$id, $slug];
+        });
 
         return response()->json([
             'success' => true,
@@ -115,33 +114,22 @@ class NoticiaController extends Controller
             'publicada' => ['sometimes', 'boolean'],
         ]);
 
-        if (isset($datos['titulo'])) {
-            $slugBase = Str::slug($datos['titulo']);
-            $slug = $slugBase;
-            $contador = 2;
-
-            while (
-                DB::table('noticias')
-                    ->where('slug', $slug)
-                    ->where('id', '!=', $id)
-                    ->exists()
-            ) {
-                $slug = $slugBase . '-' . $contador++;
-            }
-
-            $datos['slug'] = $slug;
-        }
-
-        $actualizado = DB::table('noticias')
-            ->where('id', $id)
-            ->update($datos);
-
-        if (!$actualizado && !DB::table('noticias')->where('id', $id)->exists()) {
+        if (! DB::table('noticias')->where('id', $id)->exists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Noticia no encontrada.',
             ], 404);
         }
+
+        $this->guardarConSlugUnico(function () use ($datos, $id) {
+            if (isset($datos['titulo'])) {
+                $datos['slug'] = $this->generarSlug($datos['titulo'], $id);
+            }
+
+            return DB::table('noticias')
+                ->where('id', $id)
+                ->update($datos);
+        });
 
         return response()->json([
             'success' => true,
@@ -154,7 +142,7 @@ class NoticiaController extends Controller
     {
         $eliminada = DB::table('noticias')->where('id', $id)->delete();
 
-        if (!$eliminada) {
+        if (! $eliminada) {
             return response()->json([
                 'success' => false,
                 'message' => 'Noticia no encontrada.',
@@ -166,52 +154,107 @@ class NoticiaController extends Controller
             'message' => 'Noticia eliminada correctamente.',
         ]);
     }
+
     public function show(string $slug)
-{
-    $noticia = \Illuminate\Support\Facades\DB::table('noticias')
-        ->where('slug', $slug)
-        ->where('publicada', true)
-        ->first();
+    {
+        $noticia = DB::table('noticias')
+            ->where('slug', $slug)
+            ->where('publicada', true)
+            ->first();
 
-    if (!$noticia) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Noticia no encontrada',
-        ], 404);
-    }
-
-    return response()->json([
-        'success' => true,
-        'noticia' => $noticia,
-    ]);
-}
-
-
-public function subirImagen(Request $request): JsonResponse
-{
-    $request->validate([
-        'imagen' => 'required|image|mimes:jpg,jpeg,png,webp|max:15360',
-    ]);
-
-    try {
-        $resultado = \CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::uploadApi()->upload(
-            $request->file('imagen')->getRealPath(),
-            [
-                'folder' => 'sedede/noticias',
-            ]
-        );
+        if (! $noticia) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Noticia no encontrada',
+            ], 404);
+        }
 
         return response()->json([
             'success' => true,
-            'url' => $resultado['secure_url'],
+            'noticia' => $noticia,
         ]);
-    } catch (\Throwable $e) {
-        \Log::error('Error al subir imagen a Cloudinary: '.$e->getMessage());
-
-        return response()->json([
-            'success' => false,
-            'message' => 'No se pudo subir la imagen.',
-        ], 500);
     }
-}
+
+    public function subirImagen(Request $request): JsonResponse
+    {
+        $request->validate([
+            'imagen' => 'required|image|mimes:jpg,jpeg,png,webp|max:15360',
+        ]);
+
+        try {
+            $resultado = Cloudinary::uploadApi()->upload(
+                $request->file('imagen')->getRealPath(),
+                [
+                    'folder' => 'sedede/noticias',
+                ]
+            );
+
+            return response()->json([
+                'success' => true,
+                'url' => $resultado['secure_url'],
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Error al subir imagen a Cloudinary: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo subir la imagen.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Genera un slug único para una noticia.
+     */
+    private function generarSlug(string $titulo, ?int $ignorarId = null): string
+    {
+        $slugBase = Str::slug($titulo);
+
+        if ($slugBase === '') {
+            $slugBase = 'noticia';
+        }
+
+        $slug = $slugBase;
+        $contador = 2;
+
+        while (
+            DB::table('noticias')
+                ->where('slug', $slug)
+                ->when(
+                    $ignorarId !== null,
+                    fn ($consulta) => $consulta->where('id', '!=', $ignorarId)
+                )
+                ->exists()
+        ) {
+            $slug = $slugBase.'-'.$contador++;
+        }
+
+        return $slug;
+    }
+
+    /**
+     * Ejecuta la operación en una transacción y reintenta si el slug choca.
+     */
+    private function guardarConSlugUnico(callable $operacion): mixed
+    {
+        $intentos = 0;
+
+        while (true) {
+            try {
+                return DB::transaction($operacion);
+            } catch (QueryException $excepcion) {
+                $intentos++;
+
+                if ($intentos >= 3 || ! $this->esColisionDeSlug($excepcion)) {
+                    throw $excepcion;
+                }
+            }
+        }
+    }
+
+    private function esColisionDeSlug(QueryException $excepcion): bool
+    {
+        return in_array((string) $excepcion->getCode(), ['23505', '23000'], true)
+            && str_contains($excepcion->getMessage(), 'slug');
+    }
 }
