@@ -1,12 +1,12 @@
 <?php
 
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ComunicadoController;
+use App\Http\Controllers\EventoController;
+use App\Http\Controllers\NoticiaController;
+use App\Http\Middleware\AdminMiddleware;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\NoticiaController;
-use App\Http\Controllers\ComunicadoController;
-use App\Http\Middleware\AdminMiddleware;
-use App\Http\Controllers\EventoController;
-use App\Http\Controllers\AuthController;
 
 Route::get('/noticias', [NoticiaController::class, 'index']);
 Route::get('/noticias/{slug}', [NoticiaController::class, 'show']);
@@ -33,14 +33,18 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', AdminMiddleware::class])->prefix('admin')->group(function () {
     Route::get('/noticias', [NoticiaController::class, 'adminIndex']);
     Route::post('/noticias', [NoticiaController::class, 'store']);
-    Route::post('/noticias', [NoticiaController::class, 'store']);
-    Route::put('/noticias/{id}', [NoticiaController::class, 'update']);
-    Route::delete('/noticias/{id}', [NoticiaController::class, 'destroy']);
+    Route::put('/noticias/{id}', [NoticiaController::class, 'update'])->whereNumber('id');
+    Route::delete('/noticias/{id}', [NoticiaController::class, 'destroy'])->whereNumber('id');
     Route::post('/noticias/subir-imagen', [NoticiaController::class, 'subirImagen']);
 
     Route::get('/comunicados', [ComunicadoController::class, 'adminIndex']);
     Route::post('/comunicados', [ComunicadoController::class, 'store']);
-    Route::put('/comunicados/{id}', [ComunicadoController::class, 'update']);
-    Route::delete('/comunicados/{id}', [ComunicadoController::class, 'destroy']);
+    Route::put('/comunicados/{id}', [ComunicadoController::class, 'update'])->whereNumber('id');
+    Route::delete('/comunicados/{id}', [ComunicadoController::class, 'destroy'])->whereNumber('id');
     Route::post('/comunicados/subir-archivo', [ComunicadoController::class, 'subirArchivo']);
+
+    Route::get('/eventos', [EventoController::class, 'adminIndex']);
+    Route::post('/eventos', [EventoController::class, 'store']);
+    Route::put('/eventos/{id}', [EventoController::class, 'update'])->whereNumber('id');
+    Route::delete('/eventos/{id}', [EventoController::class, 'destroy'])->whereNumber('id');
 });
