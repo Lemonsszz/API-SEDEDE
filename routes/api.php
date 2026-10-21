@@ -14,8 +14,8 @@ Route::get('/comunicados', [ComunicadoController::class, 'index']);
 Route::get('/comunicados/{id}', [ComunicadoController::class, 'show'])->whereNumber('id');
 Route::get('/eventos', [EventoController::class, 'index']);
 
-// Inicio de sesión
-Route::post('/login', [AuthController::class, 'login']);
+// Inicio de sesión (máximo 6 intentos por minuto)
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 // Rutas para cualquier usuario autenticado
 Route::middleware('auth:sanctum')->group(function () {
