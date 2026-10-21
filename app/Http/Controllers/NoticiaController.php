@@ -6,28 +6,35 @@ use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class NoticiaController extends Controller
 {
+    private const CLAVE_LISTADO = 'noticias:publicadas';
+
+    private const CLAVE_ADMIN = 'noticias:admin';
+
     // Consultar noticias publicadas (público)
     public function index(): JsonResponse
     {
-        $noticias = DB::table('noticias')
-            ->where('publicada', true)
-            ->orderByDesc('fecha_publicacion')
-            ->get([
-                'id',
-                'titulo',
-                'slug',
-                'resumen',
-                'contenido',
-                'imagen_url',
-                'categoria',
-                'fecha_publicacion',
-                'destacada',
-            ]);
+        $noticias = Cache::remember(self::CLAVE_LISTADO, 60, function () {
+            return DB::table('noticias')
+                ->where('publicada', true)
+                ->orderByDesc('fecha_publicacion')
+                ->get([
+                    'id',
+                    'titulo',
+                    'slug',
+                    'resumen',
+                    'contenido',
+                    'imagen_url',
+                    'categoria',
+                    'fecha_publicacion',
+                    'destacada',
+                ]);
+        });
 
         return response()->json([
             'success' => true,
@@ -38,20 +45,22 @@ class NoticiaController extends Controller
     // Listar todas las noticias para el panel administrativo
     public function adminIndex(): JsonResponse
     {
-        $noticias = DB::table('noticias')
-            ->orderByDesc('fecha_publicacion')
-            ->get([
-                'id',
-                'titulo',
-                'slug',
-                'resumen',
-                'contenido',
-                'imagen_url',
-                'categoria',
-                'fecha_publicacion',
-                'destacada',
-                'publicada',
-            ]);
+        $noticias = Cache::remember(self::CLAVE_ADMIN, 30, function () {
+            return DB::table('noticias')
+                ->orderByDesc('fecha_publicacion')
+                ->get([
+                    'id',
+                    'titulo',
+                    'slug',
+                    'resumen',
+                    'contenido',
+                    'imagen_url',
+                    'categoria',
+                    'fecha_publicacion',
+                    'destacada',
+                    'publicada',
+                ]);
+        });
 
         return response()->json([
             'success' => true,
@@ -92,6 +101,9 @@ class NoticiaController extends Controller
             return [$id, $slug];
         });
 
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
+
         return response()->json([
             'success' => true,
             'message' => 'Noticia creada correctamente.',
@@ -131,6 +143,9 @@ class NoticiaController extends Controller
                 ->update($datos);
         });
 
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
+
         return response()->json([
             'success' => true,
             'message' => 'Noticia actualizada correctamente.',
@@ -148,6 +163,9 @@ class NoticiaController extends Controller
                 'message' => 'Noticia no encontrada.',
             ], 404);
         }
+
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
 
         return response()->json([
             'success' => true,

@@ -95,6 +95,11 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => 'prefer',
+            'options' => [
+                // Reutiliza la conexión entre requests (el handshake contra
+                // Supabase tarda ~2 s); se habilita con DB_PERSISTENT=true.
+                PDO::ATTR_PERSISTENT => (bool) env('DB_PERSISTENT', false),
+            ],
         ],
 
         'sqlsrv' => [

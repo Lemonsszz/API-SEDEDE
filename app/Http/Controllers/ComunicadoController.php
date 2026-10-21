@@ -2,26 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ComunicadoController extends Controller
 {
+    private const CLAVE_LISTADO = 'comunicados:publicados';
+
+    private const CLAVE_ADMIN = 'comunicados:admin';
+
     // Consultar comunicados publicados (público)
     public function index(): JsonResponse
     {
-        $comunicados = DB::table('comunicados')
-            ->where('publicado', true)
-            ->orderByDesc('fecha_publicacion')
-            ->get([
-                'id',
-                'titulo',
-                'resumen',
-                'contenido',
-                'archivo_url',
-                'fecha_publicacion',
-            ]);
+        $comunicados = Cache::remember(self::CLAVE_LISTADO, 60, function () {
+            return DB::table('comunicados')
+                ->where('publicado', true)
+                ->orderByDesc('fecha_publicacion')
+                ->get([
+                    'id',
+                    'titulo',
+                    'resumen',
+                    'contenido',
+                    'archivo_url',
+                    'fecha_publicacion',
+                ]);
+        });
 
         return response()->json([
             'success' => true,
@@ -32,19 +40,21 @@ class ComunicadoController extends Controller
     // Consultar un comunicado publicado (público)
     public function show(int $id): JsonResponse
     {
-        $comunicado = DB::table('comunicados')
-            ->where('id', $id)
-            ->where('publicado', true)
-            ->first([
-                'id',
-                'titulo',
-                'resumen',
-                'contenido',
-                'archivo_url',
-                'fecha_publicacion',
-            ]);
+        $comunicado = Cache::remember("comunicados:{$id}", 60, function () use ($id) {
+            return DB::table('comunicados')
+                ->where('id', $id)
+                ->where('publicado', true)
+                ->first([
+                    'id',
+                    'titulo',
+                    'resumen',
+                    'contenido',
+                    'archivo_url',
+                    'fecha_publicacion',
+                ]);
+        });
 
-        if (!$comunicado) {
+        if (! $comunicado) {
             return response()->json([
                 'success' => false,
                 'message' => 'Comunicado no encontrado.',
@@ -60,17 +70,19 @@ class ComunicadoController extends Controller
     // Listar todos los comunicados para el panel administrativo
     public function adminIndex(): JsonResponse
     {
-        $comunicados = DB::table('comunicados')
-            ->orderByDesc('fecha_publicacion')
-            ->get([
-                'id',
-                'titulo',
-                'resumen',
-                'contenido',
-                'archivo_url',
-                'fecha_publicacion',
-                'publicado',
-            ]);
+        $comunicados = Cache::remember(self::CLAVE_ADMIN, 30, function () {
+            return DB::table('comunicados')
+                ->orderByDesc('fecha_publicacion')
+                ->get([
+                    'id',
+                    'titulo',
+                    'resumen',
+                    'contenido',
+                    'archivo_url',
+                    'fecha_publicacion',
+                    'publicado',
+                ]);
+        });
 
         return response()->json([
             'success' => true,
@@ -98,6 +110,9 @@ class ComunicadoController extends Controller
             'publicado' => $datos['publicado'] ?? false,
         ]);
 
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
+
         return response()->json([
             'success' => true,
             'message' => 'Comunicado creado correctamente.',
@@ -116,7 +131,7 @@ class ComunicadoController extends Controller
             'publicado' => ['sometimes', 'boolean'],
         ]);
 
-        if (!DB::table('comunicados')->where('id', $id)->exists()) {
+        if (! DB::table('comunicados')->where('id', $id)->exists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Comunicado no encontrado.',
@@ -126,6 +141,10 @@ class ComunicadoController extends Controller
         DB::table('comunicados')
             ->where('id', $id)
             ->update($datos);
+
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
+        Cache::forget("comunicados:{$id}");
 
         return response()->json([
             'success' => true,
@@ -138,12 +157,16 @@ class ComunicadoController extends Controller
     {
         $eliminado = DB::table('comunicados')->where('id', $id)->delete();
 
-        if (!$eliminado) {
+        if (! $eliminado) {
             return response()->json([
                 'success' => false,
                 'message' => 'Comunicado no encontrado.',
             ], 404);
         }
+
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
+        Cache::forget("comunicados:{$id}");
 
         return response()->json([
             'success' => true,
@@ -162,7 +185,7 @@ class ComunicadoController extends Controller
             $archivo = $request->file('archivo');
             $nombreOriginal = $archivo->getClientOriginalName();
 
-            $resultado = \CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::uploadApi()->upload(
+            $resultado = Cloudinary::uploadApi()->upload(
                 $archivo->getRealPath(),
                 [
                     'folder' => 'sedede/comunicados',
@@ -179,10 +202,10 @@ class ComunicadoController extends Controller
             $nombreSinExtension = pathinfo($nombreOriginal, PATHINFO_FILENAME);
             $nombreSeguro = preg_replace('/[^A-Za-z0-9_\- ]/', '_', $nombreSinExtension);
 
-            if (!empty($nombreSeguro)) {
+            if (! empty($nombreSeguro)) {
                 $url = preg_replace(
                     '#/raw/upload/#',
-                    '/raw/upload/fl_attachment:' . rawurlencode($nombreSeguro) . '/',
+                    '/raw/upload/fl_attachment:'.rawurlencode($nombreSeguro).'/',
                     $url,
                     1
                 );
@@ -193,7 +216,7 @@ class ComunicadoController extends Controller
                 'url' => $url,
             ]);
         } catch (\Throwable $e) {
-            \Log::error('Error al subir archivo a Cloudinary: ' . $e->getMessage());
+            \Log::error('Error al subir archivo a Cloudinary: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -202,4 +225,3 @@ class ComunicadoController extends Controller
         }
     }
 }
-

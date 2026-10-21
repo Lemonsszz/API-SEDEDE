@@ -4,25 +4,32 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class EventoController extends Controller
 {
+    private const CLAVE_LISTADO = 'eventos:publicados';
+
+    private const CLAVE_ADMIN = 'eventos:admin';
+
     // Consultar eventos publicados (público)
     public function index(): JsonResponse
     {
-        $eventos = DB::table('eventos')
-            ->where('publicado', true)
-            ->orderBy('fecha')
-            ->get([
-                'id',
-                'titulo',
-                'descripcion',
-                'fecha',
-                'hora',
-                'lugar',
-                'imagen_url',
-            ]);
+        $eventos = Cache::remember(self::CLAVE_LISTADO, 60, function () {
+            return DB::table('eventos')
+                ->where('publicado', true)
+                ->orderBy('fecha')
+                ->get([
+                    'id',
+                    'titulo',
+                    'descripcion',
+                    'fecha',
+                    'hora',
+                    'lugar',
+                    'imagen_url',
+                ]);
+        });
 
         return response()->json([
             'success' => true,
@@ -33,18 +40,20 @@ class EventoController extends Controller
     // Listar todos los eventos para el panel administrativo
     public function adminIndex(): JsonResponse
     {
-        $eventos = DB::table('eventos')
-            ->orderByDesc('fecha')
-            ->get([
-                'id',
-                'titulo',
-                'descripcion',
-                'fecha',
-                'hora',
-                'lugar',
-                'imagen_url',
-                'publicado',
-            ]);
+        $eventos = Cache::remember(self::CLAVE_ADMIN, 30, function () {
+            return DB::table('eventos')
+                ->orderByDesc('fecha')
+                ->get([
+                    'id',
+                    'titulo',
+                    'descripcion',
+                    'fecha',
+                    'hora',
+                    'lugar',
+                    'imagen_url',
+                    'publicado',
+                ]);
+        });
 
         return response()->json([
             'success' => true,
@@ -74,6 +83,9 @@ class EventoController extends Controller
             'imagen_url' => $datos['imagen_url'] ?? null,
             'publicado' => $datos['publicado'] ?? false,
         ]);
+
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
 
         return response()->json([
             'success' => true,
@@ -106,6 +118,9 @@ class EventoController extends Controller
             ->where('id', $id)
             ->update($datos);
 
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
+
         return response()->json([
             'success' => true,
             'message' => 'Evento actualizado correctamente.',
@@ -123,6 +138,9 @@ class EventoController extends Controller
                 'message' => 'Evento no encontrado.',
             ], 404);
         }
+
+        Cache::forget(self::CLAVE_LISTADO);
+        Cache::forget(self::CLAVE_ADMIN);
 
         return response()->json([
             'success' => true,
