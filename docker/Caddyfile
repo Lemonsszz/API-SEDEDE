@@ -1,6 +1,17 @@
-{$CADDY_GLOBAL_OPTIONS}
+{
+	# No instalar el almacén de confianza de Caddy dentro de PHP: el bundle de
+	# CA ya está apuntado de forma explícita en php.ini (docker/Caddyfile y la
+	# etapa base del Dockerfile). Así el arranque no depende de que el proceso
+	# pueda escribir en la instalación de PHP ni de descargar certificados.
+	skip_install_trust
 
-{$SERVER_NAME:localhost} {
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+# Render reenvía el tráfico al puerto que detecte que está escuchando y fija
+# PORT=10000 por defecto. Se escucha solo en ese puerto: si el servicio
+# escucha en varios, Render espera que el público sea exactamente $PORT.
+:{$PORT:10000} {
 	log {
 		Output file /dev/stdout
 		Format console

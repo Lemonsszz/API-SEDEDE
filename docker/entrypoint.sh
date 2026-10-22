@@ -1,14 +1,15 @@
 #!/bin/sh
+# Entrypoint del contenedor de la API.
+#
+# Se ejecuta en cada arranque: cachea la configuración y las rutas para que
+# Laravel no tenga que recompilarlas en cada petición. Los dos cacheos son
+# opcionales: si fallan (por ejemplo, por una variable de entorno incompleta)
+# la aplicación sigue funcionando sin caché, así que no son fatales.
 set -e
 
-# El caché de configuración y de rutas se genera en CADA arranque y no durante
-# el build de la imagen: las variables de entorno las inyecta el hosting y no
-# existen todavía cuando se construye el contenedor.
-#
-# route:cache requiere que las rutas no usen closures; por eso la ruta
-# /api/usuario vive en AuthController y no como función anónima en routes/api.php.
+cd /app
 
-php artisan config:cache
-php artisan route:cache
+php artisan config:cache || echo "aviso: no se pudo cachear la configuracion, se sigue sin cache"
+php artisan route:cache  || echo "aviso: no se pudo cachear las rutas, se sigue sin cache"
 
 exec "$@"
