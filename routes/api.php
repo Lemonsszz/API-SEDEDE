@@ -5,7 +5,6 @@ use App\Http\Controllers\ComunicadoController;
 use App\Http\Controllers\EventoController;
 use App\Http\Controllers\NoticiaController;
 use App\Http\Middleware\AdminMiddleware;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/noticias', [NoticiaController::class, 'index']);
@@ -21,12 +20,7 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    Route::get('/usuario', function (Request $request) {
-        return response()->json([
-            'success' => true,
-            'user' => $request->user(),
-        ]);
-    });
+    Route::get('/usuario', [AuthController::class, 'usuario']);
 });
 
 // Rutas exclusivas de administradores

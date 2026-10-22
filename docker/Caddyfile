@@ -1,0 +1,15 @@
+{$CADDY_GLOBAL_OPTIONS}
+
+{$SERVER_NAME:localhost} {
+	log {
+		Output file /dev/stdout
+		Format console
+	}
+
+	root * /app/public
+	encode zstd br gzip
+
+	php_server {
+		worker_dir /tmp/frankenphp
+	}
+}

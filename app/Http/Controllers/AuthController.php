@@ -19,7 +19,7 @@ class AuthController extends Controller
 
         $usuario = User::where('email', $datos['email'])->first();
 
-        if (!$usuario || !Hash::check($datos['password'], $usuario->password)) {
+        if (! $usuario || ! Hash::check($datos['password'], $usuario->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales proporcionadas no son correctas.'],
             ]);
@@ -36,6 +36,20 @@ class AuthController extends Controller
                 'email' => $usuario->email,
                 'rol' => $usuario->rol,
             ],
+        ]);
+    }
+
+    /**
+     * Datos del usuario autenticado.
+     *
+     * Vive en el controlador (y no como closure en routes/api.php) para que
+     * `php artisan route:cache` pueda serializar las rutas en producción.
+     */
+    public function usuario(Request $request): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'user' => $request->user(),
         ]);
     }
 

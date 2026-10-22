@@ -1,0 +1,31 @@
+# Nunca incluir secretos ni artefactos locales en la imagen.
+.env
+.env.*
+!.env.example
+
+# Dependencias: se instalan dentro de la imagen en la etapa de Composer.
+vendor
+node_modules
+
+# Archivos generados en tiempo de ejecución.
+storage/logs/*.log
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*.php
+
+# Tests y herramientas de desarrollo.
+tests
+phpunit.xml
+.phpunit.result.cache
+.phpunit.cache
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Sistema de control de versiones y editores.
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
