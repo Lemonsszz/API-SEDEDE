@@ -173,6 +173,13 @@ class NoticiaController extends Controller
         ]);
     }
 
+    /**
+     * Consultar una noticia publicada (público).
+     *
+     * Sin caché a propósito: Next.js lo llama con `cache: "no-store"` desde la
+     * página de detalle, y una respuesta cacheada haría parecer que la noticia
+     * no existe.
+     */
     public function show(string $slug)
     {
         $noticia = DB::table('noticias')

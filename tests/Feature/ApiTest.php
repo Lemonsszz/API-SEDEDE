@@ -189,6 +189,78 @@ class ApiTest extends TestCase
             ->assertJsonPath('data.0.titulo', 'Publicado');
     }
 
+    /**
+     * El caché de 60 s se omite cuando el cliente manda `Cache-Control: no-cache`
+     * (lo que hace el frontend con `cache: "no-store"`). Sin esto, la primera
+     * visita a /comunicados o /eventos cachea la lista vacía y el sitio sigue
+     * mostrando "No hay comunicados publicados" durante un minuto entero.
+     */
+    public function test_no_cache_header_bypasses_public_listing_cache(): void
+    {
+        DB::table('comunicados')->insert([
+            'titulo' => 'Primero',
+            'publicado' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Primera llamada SIN cabecera: llena el caché con el estado actual.
+        $this->getJson('/api/comunicados')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        // Alguien publica un comunicado nuevo (por fuera del panel).
+        DB::table('comunicados')->insert([
+            'titulo' => 'Segundo',
+            'publicado' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Sin cabecera, el caché sigue sirviendo la lista vieja (comportamiento
+        // esperado: es el TTL de 60 s).
+        $this->getJson('/api/comunicados')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        // Con `no-cache`, el backend consulta la base y devuelve lo nuevo.
+        $this->withHeaders(['Cache-Control' => 'no-cache'])
+            ->getJson('/api/comunicados')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
+    /**
+     * Misma verificación que el caso de comunicados, pero para eventos.
+     */
+    public function test_no_cache_header_bypasses_eventos_cache(): void
+    {
+        // Primera llamada: cachea la lista vacía.
+        $this->getJson('/api/eventos')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        DB::table('eventos')->insert([
+            'titulo' => 'Evento',
+            'fecha' => '2026-12-01',
+            'publicado' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Cliente normal: sigue viendo el caché.
+        $this->getJson('/api/eventos')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        // Cliente con `no-cache`: ve el evento recién insertado.
+        $this->withHeaders(['Cache-Control' => 'no-cache'])
+            ->getJson('/api/eventos')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.titulo', 'Evento');
+    }
+
     public function test_non_admin_cannot_access_admin_routes(): void
     {
         $usuario = $this->crearUsuario('usuario');

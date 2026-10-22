@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -14,22 +15,58 @@ class ComunicadoController extends Controller
 
     private const CLAVE_ADMIN = 'comunicados:admin';
 
+    /**
+     * Igual que index(), pero para los Server Components del frontend.
+     *
+     * El caché de 60 s se omite cuando la petición pide datos frescos con
+     * `cache: "no-store"` (lo hace lib/api.ts). Sin esto, Next.js guarda el
+     * resultado de la primera carga y el sitio sigue mostrando "No hay
+     * comunicados publicados" durante un minuto entero después de la primera
+     * visita a la página, aunque ya haya contenido. Ver el mismo comentario en
+     * NoticiaController::index().
+     */
+    private function listadoPublico(): Collection
+    {
+        if ($this->datosFrescos()) {
+            return $this->consultaPublicada();
+        }
+
+        return Cache::remember(self::CLAVE_LISTADO, 60, fn () => $this->consultaPublicada());
+    }
+
+    private function consultaPublicada(): Collection
+    {
+        return DB::table('comunicados')
+            ->where('publicado', true)
+            ->orderByDesc('fecha_publicacion')
+            ->get([
+                'id',
+                'titulo',
+                'resumen',
+                'contenido',
+                'archivo_url',
+                'fecha_publicacion',
+            ]);
+    }
+
+    /**
+     * `true` cuando el cliente pidió explícitamente no usar caché.
+     */
+    private function datosFrescos(): bool
+    {
+        return str_contains(
+            (string) request()->header('Cache-Control'),
+            'no-cache'
+        ) || str_contains(
+            (string) request()->header('Pragma'),
+            'no-cache'
+        );
+    }
+
     // Consultar comunicados publicados (público)
     public function index(): JsonResponse
     {
-        $comunicados = Cache::remember(self::CLAVE_LISTADO, 60, function () {
-            return DB::table('comunicados')
-                ->where('publicado', true)
-                ->orderByDesc('fecha_publicacion')
-                ->get([
-                    'id',
-                    'titulo',
-                    'resumen',
-                    'contenido',
-                    'archivo_url',
-                    'fecha_publicacion',
-                ]);
-        });
+        $comunicados = $this->listadoPublico();
 
         return response()->json([
             'success' => true,

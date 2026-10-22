@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -13,23 +14,59 @@ class EventoController extends Controller
 
     private const CLAVE_ADMIN = 'eventos:admin';
 
+    /**
+     * Igual que index(), pero para los Server Components del frontend.
+     *
+     * El caché de 60 s se omite cuando la petición pide datos frescos con
+     * `cache: "no-store"` (lo hace lib/api.ts). Sin esto, Next.js guarda el
+     * resultado de la primera carga y el sitio sigue mostrando "No hay
+     * próximos eventos" durante un minuto entero después de la primera visita
+     * a la página, aunque ya haya contenido. Ver el mismo comentario en
+     * NoticiaController::index().
+     */
+    private function listadoPublico(): Collection
+    {
+        if ($this->datosFrescos()) {
+            return $this->consultaPublicada();
+        }
+
+        return Cache::remember(self::CLAVE_LISTADO, 60, fn () => $this->consultaPublicada());
+    }
+
+    private function consultaPublicada(): Collection
+    {
+        return DB::table('eventos')
+            ->where('publicado', true)
+            ->orderBy('fecha')
+            ->get([
+                'id',
+                'titulo',
+                'descripcion',
+                'fecha',
+                'hora',
+                'lugar',
+                'imagen_url',
+            ]);
+    }
+
+    /**
+     * `true` cuando el cliente pidió explícitamente no usar caché.
+     */
+    private function datosFrescos(): bool
+    {
+        return str_contains(
+            (string) request()->header('Cache-Control'),
+            'no-cache'
+        ) || str_contains(
+            (string) request()->header('Pragma'),
+            'no-cache'
+        );
+    }
+
     // Consultar eventos publicados (público)
     public function index(): JsonResponse
     {
-        $eventos = Cache::remember(self::CLAVE_LISTADO, 60, function () {
-            return DB::table('eventos')
-                ->where('publicado', true)
-                ->orderBy('fecha')
-                ->get([
-                    'id',
-                    'titulo',
-                    'descripcion',
-                    'fecha',
-                    'hora',
-                    'lugar',
-                    'imagen_url',
-                ]);
-        });
+        $eventos = $this->listadoPublico();
 
         return response()->json([
             'success' => true,
