@@ -22,6 +22,21 @@ RUN install-php-extensions pdo_pgsql opcache @composer
 RUN echo "curl.cainfo=/etc/ssl/certs/ca-certificates.crt"  > /usr/local/etc/php/conf.d/zz-ca.ini \
  && echo "openssl.cafile=/etc/ssl/certs/ca-certificates.crt" >> /usr/local/etc/php/conf.d/zz-ca.ini
 
+# Límites de subida. El valor por defecto de PHP es upload_max_filesize=2M, muy
+# por debajo de una foto de celular (3-12 MB): el archivo se descarta y el
+# panel responde "failed to upload"; si además supera post_max_size (8M por
+# defecto), PHP tira el cuerpo completo del POST y el formulario parece
+# reiniciarse. post_max_size siempre tiene que ser mayor que
+# upload_max_filesize. memory_limit se sube porque Cloudinary y la validación
+# de imágenes trabajan con el archivo en memoria.
+RUN printf '%s\n' \
+      'upload_max_filesize = 20M' \
+      'post_max_size = 25M' \
+      'memory_limit = 256M' \
+      'max_execution_time = 120' \
+      'max_input_time = 120' \
+      > /usr/local/etc/php/conf.d/zz-uploads.ini
+
 # La imagen oficial marca el binario de FrankenPHP con la capacidad de archivo
 # `cap_net_bind_service` (setcap) para poder escuchar en el puerto 80 sin ser
 # root. El sandbox de Render no admite capacidades de archivo: al ejecutar el
