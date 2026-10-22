@@ -22,6 +22,18 @@ RUN install-php-extensions pdo_pgsql opcache @composer
 RUN echo "curl.cainfo=/etc/ssl/certs/ca-certificates.crt"  > /usr/local/etc/php/conf.d/zz-ca.ini \
  && echo "openssl.cafile=/etc/ssl/certs/ca-certificates.crt" >> /usr/local/etc/php/conf.d/zz-ca.ini
 
+# La imagen oficial marca el binario de FrankenPHP con la capacidad de archivo
+# `cap_net_bind_service` (setcap) para poder escuchar en el puerto 80 sin ser
+# root. El sandbox de Render no admite capacidades de archivo: al ejecutar el
+# binario devuelve "Operation not permitted" y el contenedor muere con estado
+# 126. Aquí el servidor ya escucha en $PORT (10000, que no es privilegiado),
+# así que la capacidad sobra. Se copia el binario a una ruta nueva —que no
+# arrastra el atributo de capacidad— y se usa esa.
+RUN cp /usr/local/bin/frankenphp /usr/local/bin/frankenphp-run \
+ && chmod 0755 /usr/local/bin/frankenphp-run \
+ && { setcap -r /usr/local/bin/frankenphp-run || true; } \
+ && ! getcap /usr/local/bin/frankenphp-run | grep -q .
+
 # Composer se ejecuta como root dentro de la imagen.
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
@@ -74,4 +86,4 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 80
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+CMD ["frankenphp-run", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
