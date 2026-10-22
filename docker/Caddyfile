@@ -1,26 +1,24 @@
 {
 	# No instalar el almacén de confianza de Caddy dentro de PHP: el bundle de
-	# CA ya está apuntado de forma explícita en php.ini (docker/Caddyfile y la
-	# etapa base del Dockerfile). Así el arranque no depende de que el proceso
-	# pueda escribir en la instalación de PHP ni de descargar certificados.
+	# CA ya está apuntado de forma explícita en php.ini (en el Dockerfile).
+	# Así el arranque no depende de que el proceso pueda escribir en la
+	# instalación de PHP ni de descargar certificados.
 	skip_install_trust
 
 	{$CADDY_GLOBAL_OPTIONS}
+
+	frankenphp {
+		{$FRANKENPHP_CONFIG}
+	}
 }
 
 # Render reenvía el tráfico al puerto que detecte que está escuchando y fija
 # PORT=10000 por defecto. Se escucha solo en ese puerto: si el servicio
 # escucha en varios, Render espera que el público sea exactamente $PORT.
+# Una dirección sin nombre de host evita además el TLS automático.
 :{$PORT:10000} {
-	log {
-		Output file /dev/stdout
-		Format console
-	}
-
 	root * /app/public
 	encode zstd br gzip
 
-	php_server {
-		worker_dir /tmp/frankenphp
-	}
+	php_server
 }
